@@ -4,9 +4,16 @@
 #include "ray.h"
 
 struct hit_record {
-    point3 p;     // hit point
-    vec3 normal;  // normal vector
-    double t;     // t value of the ray
+    point3 p;         // hit point
+    vec3 normal;      // normal vector
+    double t;         // t value of the ray
+    bool front_face;  // whether hit in the front face
+
+    // set boolean variable front_face, set normal to point outward
+    inline void set_face_normal(const ray& r, const vec3& outward_normal) {
+        front_face = dot(r.direction(), outward_normal) < 0;
+        normal = front_face ? outward_normal : -outward_normal;
+    }
 };
 
 class hittable {
