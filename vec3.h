@@ -40,6 +40,23 @@ class vec3 {
     }
 
     double length() { return sqrt(length_squared()); }
+
+    inline static vec3 random() {
+        return vec3(random_double(), random_double(), random_double());
+    }
+
+    inline static vec3 random(double min, double max) {
+        return vec3(random_double(min, max), random_double(min, max),
+                    random_double(min, max));
+    }
+
+    static vec3 random_in_unit_sphere() {
+        while (true) {
+            auto p = random(-1, 1);
+            if (p.length_squared() >= 1) continue;
+            return p;
+        }
+    }
 };
 
 // Type aliases for vec3
