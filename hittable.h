@@ -3,11 +3,14 @@
 
 #include "ray.h"
 
+class material;
+
 struct hit_record {
-    point3 p;         // hit point
-    vec3 normal;      // normal vector
-    double t;         // t value of the ray
-    bool front_face;  // whether hit in the front face
+    point3 p;                      // hit point
+    vec3 normal;                   // normal vector
+    shared_ptr<material> mat_ptr;  // pointer to material class
+    double t;                      // t value of the ray
+    bool front_face;               // whether hit in the front face
 
     // set boolean variable front_face, set normal to point outward
     inline void set_face_normal(const ray& r, const vec3& outward_normal) {

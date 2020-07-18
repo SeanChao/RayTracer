@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "hittable_list.h"
+#include "material.h"
 #include "sphere.h"
 
 // Returns `t` of the hit point that we faces or -1.0
@@ -23,18 +24,16 @@ double hit_sphere(const point3& center, double radius, const ray& r) {
 
 // Assign the given ray a color in the world.
 // If the ray hits nothing, it's in blue-scale background color.
-// Otherwise, it takes half of a bounced ray color
 color ray_color(const ray& r, const hittable& world, int depth) {
     // If we've exceeded the ray bounce limit, no more light is gathered.
     if (depth <= 0) return color(0, 0, 0);
     hit_record rec;
     if (world.hit(r, 0.001, infinity, rec)) {
-        // for sphere, normal is smaller than 1
-        // start from hit point p, add a random vec from the cut sphere
-        point3 target = rec.p + rec.normal + vec3::random_unit_vector();
-        // ray from hit point to target, spheres absorb half the energy on
-        // each bounce
-        return 0.5 * ray_color(ray(rec.p, target - rec.p), world, depth - 1);
+        ray scattered;
+        color attenuation;
+        if (rec.mat_ptr->scatter(r, rec, attenuation, scattered))
+            return attenuation * ray_color(scattered, world, depth - 1);
+        return color(0, 0, 0);
     }
     vec3 unit_direction = unit_vector(r.direction());
     auto t = 0.5 * (unit_direction.y() + 1.0);  // map y to [0, 1]
@@ -44,7 +43,7 @@ color ray_color(const ray& r, const hittable& world, int depth) {
 
 int main() {
     const auto aspect_ratio = 16.0 / 9.0;
-    const int image_width = 640;  // 720p
+    const int image_width = 320;
     const int image_height = static_cast<int>(image_width / aspect_ratio);
     const int samples_per_pixel = 100;
     const int max_depth = 50;
@@ -53,8 +52,19 @@ int main() {
     std::cout << "P3\n" << image_width << " " << image_height << "\n255\n";
 
     hittable_list world;
-    world.add(make_shared<sphere>(point3(0, 0, -1), 0.5));
-    world.add(make_shared<sphere>(point3(0, -100.5, -1), 100));
+    world.add(make_shared<sphere>(
+        point3(0, 0, -1), 0.5, make_shared<lambertian>(color(0.7, 0.3, 0.3))));
+
+    world.add(
+        make_shared<sphere>(point3(0, -100.5, -1), 100,
+                            make_shared<lambertian>(color(0.8, 0.8, 0.0))));
+
+    world.add(make_shared<sphere>(point3(1, 0, -1), 0.5,
+                                  make_shared<metal>(color(.8, .6, .2), 0.5)));
+    world.add(make_shared<sphere>(point3(-1, 0, -1), 0.5,
+                                  make_shared<metal>(color(.8, .8, .8))));
+    world.add(make_shared<sphere>(point3(0.5, 0.5, -1), 0.2,
+                                  make_shared<metal>(color(.2, .4, .8))));
 
     camera cam;
 

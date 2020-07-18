@@ -4,6 +4,9 @@
 #include <cmath>
 #include <iostream>
 
+class vec3;
+double dot(const vec3 &u, const vec3 &v);
+
 class vec3 {
    public:
     double e[3];
@@ -108,5 +111,8 @@ inline vec3 cross(const vec3 &u, const vec3 &v) {
 
 // Returns the unit vector of v
 inline vec3 unit_vector(vec3 v) { return v / v.length(); }
+
+// Returns reflected ray v with normal n
+vec3 reflect(const vec3 &v, const vec3 &n) { return v - 2 * dot(v, n) * n; }
 
 #endif
