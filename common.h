@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <random>
 
 // Using
 
@@ -21,9 +22,16 @@ const double pi = 3.1415926535897932385;
 
 inline double degrees_to_radians(double degrees) { return degrees * pi / 180; }
 
+// Thread safe random number generator
+int intRand(const int& min, const int& max) {
+    static thread_local std::mt19937 generator;
+    std::uniform_int_distribution<int> distribution(min, max);
+    return distribution(generator);
+}
+
 // Returns a random real in [0,1).
 inline double random_double() {
-    return rand() / (RAND_MAX + 1.0);
+    return intRand(0, RAND_MAX) / (RAND_MAX + 1.0);
 }
 
 inline double random_double(double min, double max) {

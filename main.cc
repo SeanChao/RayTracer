@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "ThreadPool.h"
 #include "common.h"
 #include "hittable_list.h"
 #include "material.h"
@@ -91,54 +92,77 @@ color ray_color(const ray& r, const hittable& world, int depth) {
     return (1.0 - t) * color(1.0, 1.0, 1.0) + t * color(0.5, 0.7, 1.0);
 }
 
+std::mutex cnt_mutex;
+int rendered_pixels = 0;
+
+void render_pixel(int j, int i, const hittable_list& world, const camera& cam,
+                  int w, int h, int samples_per_pixel, int max_depth,
+                  std::vector<color>& result) {
+    color pixel_color(0, 0, 0);  // accumulator
+    for (int s = 0; s < samples_per_pixel; s++) {
+        // randomly pick surronding color to antialiasing
+        auto u = (i + random_double()) / (w - 1);
+        auto v = (j + random_double()) / (h - 1);
+        ray r = cam.get_ray(u, v);
+        pixel_color += ray_color(r, world, max_depth);
+    }
+    cnt_mutex.lock();
+    rendered_pixels++;
+    std::cerr << "\r" << w * h - rendered_pixels << ' ' << std::flush;
+    cnt_mutex.unlock();
+    result[j * w + i] = pixel_color;
+}
+
+void concurrent_render(const int thread_cnt, const hittable_list& world,
+                       const camera& cam, int image_width, int image_height,
+                       int samples_per_pixel, int max_depth) {
+    ThreadPool thread_pool(thread_cnt);
+    std::vector<color> result(image_width * image_height);
+    std::cerr << ">> Rendering" << std::endl;
+    for (int j = image_height - 1; j >= 0; j--) {
+        for (int i = 0; i < image_width; i++) {
+            thread_pool.enqueue([j, i, &world, cam, image_width, image_height,
+                                 samples_per_pixel, max_depth, &result]() {
+                render_pixel(j, i, world, cam, image_width, image_height,
+                             samples_per_pixel, max_depth, result);
+            });
+        }
+    }
+    thread_pool.wait_until_nothing_in_flight();
+    std::cerr << "\r";
+    std::cerr << ">> Writting to file" << std::endl;
+    for (int j = image_height - 1; j >= 0; j--) {
+        for (int i = 0; i < image_width; i++) {
+            write_color(std::cout, result[j * image_width + i],
+                        samples_per_pixel);
+        }
+    }
+}
+
 int main() {
     const auto aspect_ratio = 16.0 / 9.0;
-    const int image_width = 320;
+    const int image_width = 3840;
     const int image_height = static_cast<int>(image_width / aspect_ratio);
-    const int samples_per_pixel = 100;
+    const int samples_per_pixel = 500;
     const int max_depth = 50;
 
     // P3: colors in ASCII, width * height, 255 for max color
     std::cout << "P3\n" << image_width << " " << image_height << "\n255\n";
 
-    hittable_list world;
+    // World
+    auto world = random_scene();
 
-    auto material_ground = make_shared<lambertian>(color(0.8, 0.8, 0.0));
-    auto material_center = make_shared<lambertian>(color(0.1, 0.2, 0.5));
-    auto material_left = make_shared<dielectric>(1.5);
-    auto material_right = make_shared<metal>(color(0.8, 0.6, 0.2), 0.0);
-
-    world.add(
-        make_shared<sphere>(point3(0.0, -100.5, -1.0), 100.0, material_ground));
-    world.add(
-        make_shared<sphere>(point3(0.0, 0.0, -1.0), 0.5, material_center));
-    world.add(make_shared<sphere>(point3(-1.0, 0.0, -1.0), 0.5, material_left));
-    world.add(
-        make_shared<sphere>(point3(-1.0, 0.0, -1.0), -0.45, material_left));
-    world.add(make_shared<sphere>(point3(1.0, 0.0, -1.0), 0.5, material_right));
-
-    point3 lookfrom(3, 3, 2);
-    point3 lookat(0, 0, -1);
+    // Camera
+    point3 lookfrom(13, 2, 3);
+    point3 lookat(0, 0, 0);
     vec3 vup(0, 1, 0);
-    auto dist_to_focus = (lookfrom - lookat).length();
-    auto aperture = 1.0;
-
+    auto dist_to_focus = 10.0;
+    auto aperture = 0.1;
     camera cam(lookfrom, lookat, vup, 20, aspect_ratio, aperture,
                dist_to_focus);
-    for (int j = image_height - 1; j >= 0; j--) {
-        std::cerr << "\r>> " << j << ' ';
-        for (int i = 0; i < image_width; i++) {
-            color pixel_color(0, 0, 0);  // accumulator
-            for (int s = 0; s < samples_per_pixel; s++) {
-                // randomly pick surronding color to antialiasing
-                auto u = (i + random_double()) / (image_width - 1);
-                auto v = (j + random_double()) / (image_height - 1);
-                ray r = cam.get_ray(u, v);
-                pixel_color += ray_color(r, world, max_depth);
-            }
-            write_color(std::cout, pixel_color, samples_per_pixel);
-        }
-    }
+    const int thread_cnt = 4;
+    concurrent_render(thread_cnt, world, cam, image_width, image_height,
+                      samples_per_pixel, max_depth);
     std::cerr << "\rDone.\n";
     return 0;
 }
